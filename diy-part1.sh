@@ -23,5 +23,5 @@ echo 'src-git kenzo https://github.com/kenzok8/openwrt-packages' >> feeds.conf.d
 echo 'src-git small https://github.com/kenzok8/small' >> feeds.conf.default
 
 #sed -i 's/KERNEL_PATCHVER:=5.10/KERNEL_PATCHVER:=5.15/g' ./target/linux/ramips/Makefile
-sed -i 's/KERNEL_PATCHVER:=*.*/KERNEL_PATCHVER:=5.10/g' lede/target/linux/ramips/Makefile
-sed -i "s/KERNEL_TESTING_PATCHVER:=*.*/KERNEL_TESTING_PATCHVER:=5.10/g" lede/target/linux/ramips/Makefile
+sed -i 's/KERNEL_PATCHVER:=*.*/KERNEL_PATCHVER:=5.10/g' target/linux/ramips/Makefile
+sed -i "s/KERNEL_TESTING_PATCHVER:=*.*/KERNEL_TESTING_PATCHVER:=5.10/g" target/linux/ramips/Makefile
