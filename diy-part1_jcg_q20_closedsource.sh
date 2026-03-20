@@ -92,27 +92,27 @@ make package/kernel/linux/clean || true
 echo "========== kmod-ipt-nat6 已跳过，IPv6 NAT 配置已关闭 =========="
 
 
-# ======= 强力修复 netfilter.mk 缩进（所有空格转 Tab） =======
-echo "========== 强力修复 netfilter.mk 缩进 =========="
+# ======= 终极修复 netfilter.mk 缩进（强制所有 recipe 行以 Tab 开头） =======
+echo "========== 终极修复 netfilter.mk 缩进（所有空格转 Tab） =========="
 
-# 步骤1: 把所有以空格开头的行（recipe 部分）转成 Tab 开头
-# 使用 awk 更精准，只针对 recipe 行（make 命令行）
-awk '{
-  if ($0 ~ /^[ \t]*[a-zA-Z0-9@+-]/ && $0 !~ /^#/) {  # 匹配命令行（非注释、非变量）
-    sub(/^[ \t]+/, "\t");  # 所有开头空格转成 1 个 Tab
-  }
-  print
-}' package/kernel/linux/modules/netfilter.mk > netfilter.mk.tmp && mv netfilter.mk.tmp package/kernel/linux/modules/netfilter.mk
+# 备份原文件（防止万一）
+cp package/kernel/linux/modules/netfilter.mk netfilter.mk.bak
 
-# 步骤2: 删除纯空行和只剩空格的行（防止 make 误判）
+# 用 perl 更可靠地处理（awk 有时对多级缩进不准）
+perl -i -pe 's/^(\s+)/"\t" x (length($1)/4 + (length($1)%4 ? 1 : 0))/e if /^(\s+)[^\s#]/ && !/^(\s*\#)/' package/kernel/linux/modules/netfilter.mk
+
+# 或者更简单粗暴：所有以空格开头的非注释行转 1 个 Tab
+sed -i '/^ [^#]/ s/^ */	/' package/kernel/linux/modules/netfilter.mk
+
+# 删除纯空行和只剩空格的行
 sed -i '/^[[:space:]]*$/d' package/kernel/linux/modules/netfilter.mk
 
-# 步骤3: 验证第 111 行附近（Actions log 会显示）
-echo "netfilter.mk 第 100-120 行内容（检查缩进）："
-sed -n '100,120p' package/kernel/linux/modules/netfilter.mk
+# 打印问题行附近内容（111 行前后 20 行）到 log，便于检查
+echo "netfilter.mk 第 100-130 行内容（检查缩进）："
+sed -n '100,130p' package/kernel/linux/modules/netfilter.mk
 
-echo "========== netfilter.mk 缩进修复完成 =========="
+echo "========== netfilter.mk 缩进终极修复完成，请检查 log 中的 100-130 行 =========="
 
-# 清理 kernel 缓存（必须）
+# 必须清理 kernel 缓存，否则旧 Makefile 残留
 rm -rf build_dir/target-mipsel_24kc_musl/linux-ramips_mt7621/linux-5.10.251* || true
 make package/kernel/linux/clean || true
