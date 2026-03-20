@@ -56,3 +56,59 @@ rm -rf /tmp/immortal
 echo "========== 闭源驱动 + HW NAT 整合完成 =========="
 
 
+# 强制跳过 kmod-ip6tables 的打包（避免 nf_log_common.ko 缺失报错）
+echo "========== 强制移除 netfilter.mk 中 ip6tables 打包规则 =========="
+sed -i '/kmod-ip6tables/d' package/kernel/linux/modules/netfilter.mk || true
+sed -i '/ip6_tables.ko/d' package/kernel/linux/modules/netfilter.mk || true
+sed -i '/ip6table_/d' package/kernel/linux/modules/netfilter.mk || true
+sed -i '/ip6_tables/d' package/kernel/linux/modules/netfilter.mk || true
+
+# 额外清理 kernel 缓存（防止旧构建残留导致依赖检查失败）
+rm -rf build_dir/target-mipsel_24kc_musl/linux-ramips_mt7621/linux-5.10.251 || true
+make package/kernel/linux/clean || true
+
+echo "========== ip6tables 打包规则已移除，kernel 缓存已清理 =========="
+
+# ======= 针对 kmod-ipt-nat6 missing ip6_tables.ko 的修复（IPv6 NAT 模块） =======
+echo "========== 强制移除 kmod-ipt-nat6 打包规则 =========="
+
+# 移除 kmod-ipt-nat6 相关打包目标（类似 ip6tables 的处理）
+sed -i '/kmod-ipt-nat6/d' package/kernel/linux/modules/netfilter.mk || true
+sed -i '/ipt6_nat.ko/d' package/kernel/linux/modules/netfilter.mk || true
+sed -i '/nat6/d' package/kernel/linux/modules/netfilter.mk || true
+sed -i '/ipt_NAT6/d' package/kernel/linux/modules/netfilter.mk || true   # 如果有
+
+# 强制关闭 IPv6 NAT 内核配置（避免生成 ipt6_nat.ko）
+sed -i '/CONFIG_NF_NAT_IPV6/d' target/linux/ramips/mt7621/config-5.10
+sed -i '/CONFIG_IP6_NF_IPTABLES/d' target/linux/ramips/mt7621/config-5.10
+sed -i '/CONFIG_IP6_NF_MATCH_IPV6EXTHDR/d' target/linux/ramips/mt7621/config-5.10
+echo "CONFIG_NF_NAT_IPV6=n" >> target/linux/ramips/mt7621/config-5.10
+echo "CONFIG_IP6_NF_IPTABLES=n" >> target/linux/ramips/mt7621/config-5.10
+
+# 再次清理 kernel（确保配置生效）
+rm -rf build_dir/target-mipsel_24kc_musl/linux-ramips_mt7621/linux-5.10.251* || true
+make package/kernel/linux/clean || true
+
+echo "========== kmod-ipt-nat6 已跳过，IPv6 NAT 配置已关闭 =========="
+
+
+# ======= 修复 sed 修改 netfilter.mk 导致的 "missing separator" =======
+echo "========== 修复 netfilter.mk 缩进（空格转 Tab） =========="
+
+# 把所有 recipe 开头的 空格 转回 Tab（常见 4/8 空格转 Tab）
+sed -i 's/^    /\t/g' package/kernel/linux/modules/netfilter.mk   # 4 空格
+sed -i 's/^        /\t/g' package/kernel/linux/modules/netfilter.mk  # 8 空格
+sed -i 's/^ \+/\t/g' package/kernel/linux/modules/netfilter.mk        # 任意连续空格转 1 Tab
+
+# 额外清理空行或非法行（有时 sed 会留垃圾）
+sed -i '/^$/d' package/kernel/linux/modules/netfilter.mk
+sed -i '/^[[:space:]]*$/d' package/kernel/linux/modules/netfilter.mk
+
+# 验证 Makefile 是否正常（可选，Actions log 会显示）
+head -n 150 package/kernel/linux/modules/netfilter.mk | tail -n 20
+
+echo "========== netfilter.mk 缩进修复完成 =========="
+
+# 继续清理 kernel 缓存
+rm -rf build_dir/target-mipsel_24kc_musl/linux-ramips_mt7621/linux-5.10.251* || true
+make package/kernel/linux/clean || true
