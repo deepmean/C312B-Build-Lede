@@ -54,3 +54,17 @@ cp -r /tmp/immortal/package/kernel/* package/kernel/ 2>/dev/null || true
 rm -rf /tmp/immortal
 
 echo "========== 闭源驱动 + HW NAT 整合完成 =========="
+
+
+# 强制跳过 kmod-ip6tables 的打包（避免 nf_log_common.ko 缺失报错）
+echo "========== 强制移除 netfilter.mk 中 ip6tables 打包规则 =========="
+sed -i '/kmod-ip6tables/d' package/kernel/linux/modules/netfilter.mk || true
+sed -i '/ip6_tables.ko/d' package/kernel/linux/modules/netfilter.mk || true
+sed -i '/ip6table_/d' package/kernel/linux/modules/netfilter.mk || true
+sed -i '/ip6_tables/d' package/kernel/linux/modules/netfilter.mk || true
+
+# 额外清理 kernel 缓存（防止旧构建残留导致依赖检查失败）
+rm -rf build_dir/target-mipsel_24kc_musl/linux-ramips_mt7621/linux-5.10.251 || true
+make package/kernel/linux/clean || true
+
+echo "========== ip6tables 打包规则已移除，kernel 缓存已清理 =========="
