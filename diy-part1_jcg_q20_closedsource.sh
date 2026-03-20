@@ -28,91 +28,14 @@ sed -i 's/KERNEL_PATCHVER:=*.*/KERNEL_PATCHVER:=5.10/g' target/linux/ramips/Make
 sed -i "s/KERNEL_TESTING_PATCHVER:=*.*/KERNEL_TESTING_PATCHVER:=5.10/g" target/linux/ramips/Makefile
 
 
-# === 提取 padavanonly/immortalwrt mt7915_mtwifi 的闭源驱动 + MTK HW NAT ===
-echo "========== 开始整合闭源 MT7915 驱动 + MTK HW NAT =========="
+# === MTK 闭源 WiFi + HWNAT ===
 
-# 先清理 Lean 自带的开源 MT76 驱动（避免冲突）
-rm -rf package/kernel/mt76 package/kernel/mac80211 package/kernel/mwlwifi 2>/dev/null || true
+git clone https://github.com/padavanonly/immortalwrt -b mt7915_mtwifi /tmp/immortal
 
-# 克隆目标分支
-git clone -b mt7915_mtwifi --depth=1 https://github.com/padavanonly/immortalwrt.git /tmp/immortal
+cp -r /tmp/immortal/package/mtk/drivers/mt_wifi package/
+cp -r /tmp/immortal/package/mtk/drivers/mtk_hnat package/
 
-# 复制闭源 WiFi 驱动（mwlwifi 是该分支的 MT7915 闭源实现）
-cp -r /tmp/immortal/package/kernel/mwlwifi package/kernel/ 2>/dev/null || echo "mwlwifi 目录不存在，使用 mt76 补丁替代"
-
-# 复制 MTK HW NAT 加速包（fast-classifier + shortcut-fe）
-cp -r /tmp/immortal/package/kernel/fast-classifier package/kernel/ 2>/dev/null || true
-cp -r /tmp/immortal/package/kernel/shortcut-fe package/kernel/ 2>/dev/null || true
-
-# 复制 MTK SDK 补丁和 hnat_nf_hook（关键 NAT hook）
-cp -r /tmp/immortal/target/linux/ramips/patches-5.15/* target/linux/ramips/patches-5.15/ 2>/dev/null || true
-cp -r /tmp/immortal/target/linux/ramips/files/* target/linux/ramips/files/ 2>/dev/null || true
-
-# 如果有 mt_wifi 相关额外文件（部分 commit 里有）
-cp -r /tmp/immortal/package/kernel/* package/kernel/ 2>/dev/null || true
+cp -r /tmp/immortal/package/mtk/drivers/mtk_ethsoc package/ 2>/dev/null || true
 
 rm -rf /tmp/immortal
-
-echo "========== 闭源驱动 + HW NAT 整合完成 =========="
-
-
-# 强制跳过 kmod-ip6tables 的打包（避免 nf_log_common.ko 缺失报错）
-echo "========== 强制移除 netfilter.mk 中 ip6tables 打包规则 =========="
-sed -i '/kmod-ip6tables/d' package/kernel/linux/modules/netfilter.mk || true
-sed -i '/ip6_tables.ko/d' package/kernel/linux/modules/netfilter.mk || true
-sed -i '/ip6table_/d' package/kernel/linux/modules/netfilter.mk || true
-sed -i '/ip6_tables/d' package/kernel/linux/modules/netfilter.mk || true
-
-# 额外清理 kernel 缓存（防止旧构建残留导致依赖检查失败）
-rm -rf build_dir/target-mipsel_24kc_musl/linux-ramips_mt7621/linux-5.10.251 || true
-make package/kernel/linux/clean || true
-
-echo "========== ip6tables 打包规则已移除，kernel 缓存已清理 =========="
-
-# ======= 针对 kmod-ipt-nat6 missing ip6_tables.ko 的修复（IPv6 NAT 模块） =======
-echo "========== 强制移除 kmod-ipt-nat6 打包规则 =========="
-
-# 移除 kmod-ipt-nat6 相关打包目标（类似 ip6tables 的处理）
-sed -i '/kmod-ipt-nat6/d' package/kernel/linux/modules/netfilter.mk || true
-sed -i '/ipt6_nat.ko/d' package/kernel/linux/modules/netfilter.mk || true
-sed -i '/nat6/d' package/kernel/linux/modules/netfilter.mk || true
-sed -i '/ipt_NAT6/d' package/kernel/linux/modules/netfilter.mk || true   # 如果有
-
-# 强制关闭 IPv6 NAT 内核配置（避免生成 ipt6_nat.ko）
-sed -i '/CONFIG_NF_NAT_IPV6/d' target/linux/ramips/mt7621/config-5.10
-sed -i '/CONFIG_IP6_NF_IPTABLES/d' target/linux/ramips/mt7621/config-5.10
-sed -i '/CONFIG_IP6_NF_MATCH_IPV6EXTHDR/d' target/linux/ramips/mt7621/config-5.10
-echo "CONFIG_NF_NAT_IPV6=n" >> target/linux/ramips/mt7621/config-5.10
-echo "CONFIG_IP6_NF_IPTABLES=n" >> target/linux/ramips/mt7621/config-5.10
-
-# 再次清理 kernel（确保配置生效）
-rm -rf build_dir/target-mipsel_24kc_musl/linux-ramips_mt7621/linux-5.10.251* || true
-make package/kernel/linux/clean || true
-
-echo "========== kmod-ipt-nat6 已跳过，IPv6 NAT 配置已关闭 =========="
-
-
-# ======= 终极修复 netfilter.mk 缩进（强制所有 recipe 行以 Tab 开头） =======
-echo "========== 终极修复 netfilter.mk 缩进（所有空格转 Tab） =========="
-
-# 备份原文件（防止万一）
-cp package/kernel/linux/modules/netfilter.mk netfilter.mk.bak
-
-# 用 perl 更可靠地处理（awk 有时对多级缩进不准）
-perl -i -pe 's/^(\s+)/"\t" x (length($1)/4 + (length($1)%4 ? 1 : 0))/e if /^(\s+)[^\s#]/ && !/^(\s*\#)/' package/kernel/linux/modules/netfilter.mk
-
-# 或者更简单粗暴：所有以空格开头的非注释行转 1 个 Tab
-sed -i '/^ [^#]/ s/^ */	/' package/kernel/linux/modules/netfilter.mk
-
-# 删除纯空行和只剩空格的行
-sed -i '/^[[:space:]]*$/d' package/kernel/linux/modules/netfilter.mk
-
-# 打印问题行附近内容（111 行前后 20 行）到 log，便于检查
-echo "netfilter.mk 第 100-130 行内容（检查缩进）："
-sed -n '100,130p' package/kernel/linux/modules/netfilter.mk
-
-echo "========== netfilter.mk 缩进终极修复完成，请检查 log 中的 100-130 行 =========="
-
-# 必须清理 kernel 缓存，否则旧 Makefile 残留
-rm -rf build_dir/target-mipsel_24kc_musl/linux-ramips_mt7621/linux-5.10.251* || true
-make package/kernel/linux/clean || true
+rm -rf package/kernel/mt76 feeds/packages/kernel/mt76
