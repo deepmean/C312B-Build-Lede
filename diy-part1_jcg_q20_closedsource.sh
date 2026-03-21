@@ -27,15 +27,3 @@ echo 'src-git small https://github.com/kenzok8/small' >> feeds.conf.default
 sed -i 's/KERNEL_PATCHVER:=*.*/KERNEL_PATCHVER:=5.10/g' target/linux/ramips/Makefile
 sed -i "s/KERNEL_TESTING_PATCHVER:=*.*/KERNEL_TESTING_PATCHVER:=5.10/g" target/linux/ramips/Makefile
 
-
-# === MTK 闭源 WiFi + HWNAT ===
-
-git clone https://github.com/padavanonly/immortalwrt -b mt7915_mtwifi /tmp/immortal
-
-cp -r /tmp/immortal/package/mtk/drivers/mt_wifi package/
-cp -r /tmp/immortal/package/mtk/drivers/mtk_hnat package/
-
-cp -r /tmp/immortal/package/mtk/drivers/mtk_ethsoc package/ 2>/dev/null || true
-
-rm -rf /tmp/immortal
-rm -rf package/kernel/mt76 feeds/packages/kernel/mt76
